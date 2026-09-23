@@ -74,6 +74,78 @@ A full-stack AI coding assistant that generates, tests, and iteratively improves
 
 ---
 
+## LangGraph Workflow
+
+Every coding request runs through a stateful multi-agent graph. The diagram below shows all nodes and conditional edges:
+
+```
+                          ┌─────────┐
+                          │  START  │
+                          └────┬────┘
+                               │
+                          ┌────▼────┐
+                          │ router  │  ← classifies query intent
+                          └────┬────┘
+                               │
+               ┌───────────────┴───────────────┐
+               │ "Conversational"               │ "Coding"
+               │                               │
+      ┌────────▼─────────┐            ┌────────▼────────┐
+      │  conversational  │            │    planner      │  ← builds implementation plan
+      └────────┬─────────┘            └────────┬────────┘
+               │                               │
+             [END]                    ┌────────▼────────┐
+                                      │     coding      │  ← generates Python code
+                                      └────────┬────────┘
+                                               │
+                                      ┌────────▼────────┐
+                                      │  code_tester    │  ← runs pytest in sandbox
+                                      └────────┬────────┘
+                                               │
+                                      ┌────────▼────────┐
+                                      │ code_reflection │  ← analyses failures
+                                      └────────┬────────┘
+                                               │
+                              ┌────────────────┴────────────────┐
+                              │ tests passed OR retries >= max   │ neither
+                              │                                  │
+                     ┌────────▼────────┐               ┌────────▼────────┐
+                     │  human_review   │◄──────────────│   re_planner    │
+                     │  (interrupt)    │  regenerate   └────────┬────────┘
+                     └────────┬────────┘                        │
+                              │                        (loops back to coding)
+               ┌──────────────┴──────────────┐
+               │ approved                     │ regenerate
+               │                             │
+      ┌────────▼──────────┐        (loops back to coding)
+      │  final_response   │
+      └────────┬──────────┘
+               │
+             [END]
+```
+
+### Node responsibilities
+
+| Node | Role |
+|---|---|
+| `router` | Classifies the query as **Conversational** or **Coding** using a JSON-mode LLM call |
+| `conversational` | Handles general chat — answers directly using conversation history |
+| `planner` | Produces a structured `ImplementationPlan` (approach, steps, complexity, edge cases, dependencies) |
+| `coding` | Generates Python code using `codestral-2508`, incorporating the plan, prior reflection, and any human feedback |
+| `code_tester` | Auto-generates a pytest suite, then executes it inside the Docker/subprocess sandbox |
+| `code_reflection` | If tests fail, performs root-cause analysis and writes a `ReflectionResult` (summary, root cause, remediation plan) |
+| `re_planner` | Revises the implementation plan based on the reflection before retrying code generation |
+| `human_review` | **Interrupts** the graph and waits for user approval (`approved: true/false`) and optional feedback |
+| `final_response` | Wraps the approved code in a friendly message and appends it to the conversation |
+
+### Retry / loop logic
+
+- `code_reflection` → `re_planner` → `coding` loops until tests pass **or** `retry_count >= max_retries` (default 5)
+- After `human_review`, if the user rejects the code the graph loops back to `coding` with their feedback injected
+- All nodes retry LLM calls up to 10 times with exponential back-off before raising
+
+---
+
 ## Tech Stack
 
 ### Backend
