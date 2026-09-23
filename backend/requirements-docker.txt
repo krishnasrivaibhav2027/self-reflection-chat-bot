@@ -1,0 +1,4 @@
+# Docker SDK for Python - for programmatic Docker container management
+docker==7.1.0
+
+# Add to your existing requirements.txt or install separately
