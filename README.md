@@ -1,4 +1,4 @@
-# Coding AI — Agentic Code Assistant
+# Personal Chatbot with Self-Reflection Agentic Code Assistant
 
 A full-stack AI coding assistant that generates, tests, and iteratively improves Python code using a multi-agent LangGraph workflow. It features a React frontend, a FastAPI backend, PostgreSQL for persistence, and a secure Docker sandbox for isolated test execution.
 
